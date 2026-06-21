@@ -1,0 +1,42 @@
+[
+  {
+    "term": "resilient",
+    "language": "en",
+    "kind": "word",
+    "folder": "TOEIC",
+    "reading": "rɪˈzɪliənt",
+    "part_of_speech": "形容詞",
+    "meaning": "回復力のある、立ち直りが早い",
+    "example": "She stayed resilient through tough times.",
+    "example_translation": "彼女は苦しい時期を通して立ち直る力を失わなかった。",
+    "notes": "re-(再び) + salire(跳ねる) が語源"
+  },
+  {
+    "term": "break the ice",
+    "language": "en",
+    "kind": "idiom",
+    "meaning": "場を和ませる、緊張をほぐす",
+    "example": "He told a joke to break the ice.",
+    "example_translation": "彼は場を和ませるためにジョークを言った。"
+  },
+  {
+    "term": "시간 가는 줄 모르고",
+    "language": "ko",
+    "kind": "idiom",
+    "folder": "韓国語スラング",
+    "reading": "シガン カヌン ジュル モルゴ",
+    "meaning": "時間を忘れて、時間が経つのも忘れて",
+    "example": "시간 가는 줄 모르고 이야기했어.",
+    "example_translation": "時間を忘れて話した。"
+  },
+  {
+    "term": "반갑다",
+    "language": "ko",
+    "kind": "word",
+    "reading": "パンガプタ / bangapda",
+    "part_of_speech": "形容詞",
+    "meaning": "（会えて）うれしい",
+    "example": "만나서 반갑습니다.",
+    "example_translation": "お会いできてうれしいです。"
+  }
+]

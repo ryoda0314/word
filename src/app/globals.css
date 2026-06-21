@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1f2f6;
+  --foreground: #1a1a2b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", Meiryo, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+::placeholder {
+  color: #9aa0ac;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-rise {
+  animation: fadeInUp 0.42s cubic-bezier(0.22, 0.7, 0.25, 1) both;
+}
+
+.animate-pop {
+  animation: popIn 0.28s cubic-bezier(0.22, 0.7, 0.25, 1) both;
+}
+
+/* 位置を動かさず不透明度だけで現れる（復習の答え表示など、動きを抑えたい箇所用） */
+.animate-fade {
+  animation: fadeIn 0.18s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-pop,
+  .animate-fade {
+    animation: none;
+  }
+}
