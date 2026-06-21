@@ -1,6 +1,19 @@
 // Wordtock ─ シンプルな Service Worker（PWA インストール + 軽量オフライン対応）
-const CACHE = "wordtock-v1";
+// CACHE の値を変えると SW が更新され、古いキャッシュは activate で削除される
+const CACHE = "wordtock-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+
+// オフライン時に「キャッシュにも無い」リクエストへ返す最後のフォールバック
+// （undefined を返すと "Failed to convert value to 'Response'" エラーになる）
+function offlineResponse(request) {
+  if (request.mode === "navigate") {
+    return new Response(
+      "<!doctype html><meta charset=utf-8><title>オフライン</title><body style=\"font-family:sans-serif;padding:2rem;text-align:center;color:#555\">オフラインです。電波の届く場所でもう一度開いてください。</body>",
+      { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
+  }
+  return new Response("", { status: 503, statusText: "Offline" });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -40,14 +53,18 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/")),
-        ),
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          const shell = await caches.match("/");
+          if (shell) return shell;
+          return offlineResponse(request);
+        }),
     );
     return;
   }
 
-  // 静的アセットはキャッシュ優先
+  // 静的アセットはキャッシュ優先・ネットワークで補完
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
@@ -66,7 +83,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached);
+        .catch(() => offlineResponse(request));
     }),
   );
 });

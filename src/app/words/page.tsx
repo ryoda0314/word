@@ -49,8 +49,9 @@ function WordsPageInner() {
   }, [load]);
 
   const filtered = words.filter((w) => {
+    const kind = w.kind ?? "word";
     if (langFilter !== "all" && w.language !== langFilter) return false;
-    if (kindFilter !== "all" && w.kind !== kindFilter) return false;
+    if (kindFilter !== "all" && kind !== kindFilter) return false;
     if (folderFilter === "none" && w.folder_id) return false;
     if (
       folderFilter !== "all" &&
@@ -74,7 +75,7 @@ function WordsPageInner() {
   };
   const kindCounts = {
     all: words.length,
-    word: words.filter((w) => w.kind === "word").length,
+    word: words.filter((w) => (w.kind ?? "word") === "word").length,
     idiom: words.filter((w) => w.kind === "idiom").length,
   };
 

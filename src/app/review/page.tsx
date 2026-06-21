@@ -78,12 +78,14 @@ function ReviewPageInner() {
     const isCorrect = grade !== "again";
     const supabase = createClient();
     // 累積データも一緒に更新（SM-2 がリセットされても残る）
+    const baseTotal = current.total_reviews ?? 0;
+    const baseCorrect = current.correct_reviews ?? 0;
     await supabase
       .from("words")
       .update({
         ...update,
-        total_reviews: current.total_reviews + 1,
-        correct_reviews: current.correct_reviews + (isCorrect ? 1 : 0),
+        total_reviews: baseTotal + 1,
+        correct_reviews: baseCorrect + (isCorrect ? 1 : 0),
       })
       .eq("id", current.id);
 
@@ -97,8 +99,8 @@ function ReviewPageInner() {
           {
             ...current,
             ...update,
-            total_reviews: current.total_reviews + 1,
-            correct_reviews: current.correct_reviews,
+            total_reviews: baseTotal + 1,
+            correct_reviews: baseCorrect,
           },
         ];
       }
@@ -154,7 +156,9 @@ function ReviewPageInner() {
   }
 
   const meta = LANGUAGE_META[current.language];
-  const kindMeta = KIND_META[current.kind];
+  const kindMeta = KIND_META[current.kind ?? "word"];
+  const totalReviews = current.total_reviews ?? 0;
+  const correctReviews = current.correct_reviews ?? 0;
   const done = reviewedCount;
   const pct = Math.round((done / (done + queue.length)) * 100);
 
@@ -222,9 +226,9 @@ function ReviewPageInner() {
               </p>
             )}
             <p className="text-[11px] text-gray-400">
-              これまで {current.total_reviews} 回復習
-              {current.total_reviews > 0 &&
-                ` ・ 正答率 ${Math.round((current.correct_reviews / current.total_reviews) * 100)}%`}
+              これまで {totalReviews} 回復習
+              {totalReviews > 0 &&
+                ` ・ 正答率 ${Math.round((correctReviews / totalReviews) * 100)}%`}
             </p>
           </div>
         )}

@@ -35,7 +35,7 @@ export default function WordCard({ word, onChanged }: Props) {
   const [form, setForm] = useState({
     term: word.term,
     language: word.language,
-    kind: word.kind,
+    kind: word.kind ?? "word",
     folder_id: word.folder_id ?? "",
     reading: word.reading ?? "",
     part_of_speech: word.part_of_speech ?? "",
@@ -56,12 +56,12 @@ export default function WordCard({ word, onChanged }: Props) {
   }, [editing]);
 
   const meta = LANGUAGE_META[word.language];
-  const kindMeta = KIND_META[word.kind];
+  const kindMeta = KIND_META[word.kind ?? "word"];
   const due = dueInfo(word.srs_due);
+  const totalReviews = word.total_reviews ?? 0;
+  const correctReviews = word.correct_reviews ?? 0;
   const accuracy =
-    word.total_reviews > 0
-      ? Math.round((word.correct_reviews / word.total_reviews) * 100)
-      : null;
+    totalReviews > 0 ? Math.round((correctReviews / totalReviews) * 100) : null;
 
   async function handleSave() {
     if (!form.term.trim() || !form.meaning.trim()) {
@@ -306,7 +306,7 @@ export default function WordCard({ word, onChanged }: Props) {
             <div>
               <p className="text-[10px] font-medium text-gray-400">復習回数</p>
               <p className="text-base font-bold tabular-nums">
-                {word.total_reviews}
+                {totalReviews}
               </p>
             </div>
             <div>
