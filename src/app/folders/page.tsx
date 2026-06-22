@@ -213,6 +213,12 @@ export default function FoldersPage() {
                       </span>
                     </Link>
                     <div className="flex shrink-0 gap-1">
+                      <Link
+                        href={`/practice?folder=${f.id}`}
+                        className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+                      >
+                        実践
+                      </Link>
                       <button
                         type="button"
                         onClick={() => {

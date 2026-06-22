@@ -193,12 +193,20 @@ function WordsPageInner() {
             ))}
           </select>
           {folderFilter !== "all" && folderFilter !== "none" && (
-            <Link
-              href={reviewHref}
-              className="shrink-0 rounded-full bg-indigo-600 px-3.5 py-1.5 text-sm font-semibold text-white"
-            >
-              復習
-            </Link>
+            <>
+              <Link
+                href={`/practice?folder=${folderFilter}`}
+                className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 px-3.5 py-1.5 text-sm font-semibold text-indigo-700"
+              >
+                実践文
+              </Link>
+              <Link
+                href={reviewHref}
+                className="shrink-0 rounded-full bg-indigo-600 px-3.5 py-1.5 text-sm font-semibold text-white"
+              >
+                復習
+              </Link>
+            </>
           )}
         </div>
       )}

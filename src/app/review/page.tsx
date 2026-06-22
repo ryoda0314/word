@@ -424,6 +424,17 @@ function ReviewPageInner() {
               </option>
             ))}
           </select>
+          {folderFilter !== "all" && folderFilter !== "none" && (
+            <Link
+              href={`/practice?folder=${folderFilter}`}
+              className="mt-1 inline-flex items-center gap-1.5 self-start rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition active:scale-[0.97]"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                <path d="M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9L12 2.5zM18.5 14l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4z" />
+              </svg>
+              この単語で実践文を作る
+            </Link>
+          )}
         </label>
 
         <label className="flex flex-col gap-1.5">

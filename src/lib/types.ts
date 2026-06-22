@@ -81,3 +81,17 @@ export type GeneratedWord = {
   example: string;
   example_translation: string;
 };
+
+// 保存された実践文（履歴に表示・再閲覧用）
+export type PracticePassage = {
+  id: string;
+  user_id: string;
+  folder_id: string | null;
+  folder_name: string | null;
+  language: Language;
+  passage: string;
+  translation: string;
+  used_ids: string[];
+  words: Record<string, { term: string; meaning: string }>;
+  created_at: string;
+};

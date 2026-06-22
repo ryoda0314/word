@@ -89,3 +89,33 @@ create policy "Users can update own words" on public.words
 drop policy if exists "Users can delete own words" on public.words;
 create policy "Users can delete own words" on public.words
   for delete using (auth.uid() = user_id);
+
+-- 実践文の保存（後から見返せるように、単語辞書ごとスナップショットで持つ）
+create table if not exists public.practice_passages (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  folder_id    uuid references public.folders (id) on delete set null,
+  folder_name  text,            -- スナップショット（フォルダ削除や改名後も表示できる）
+  language     text not null check (language in ('en', 'ko')),
+  passage      text not null,   -- <w id="..."> タグ込みの本文
+  translation  text not null,
+  used_ids     jsonb not null default '[]'::jsonb,
+  -- 生成時に使った単語辞書 {id: {term, meaning}}。元の単語が消えても表示できる
+  words        jsonb not null default '{}'::jsonb,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists practice_user_idx on public.practice_passages (user_id, created_at desc);
+create index if not exists practice_folder_idx on public.practice_passages (user_id, folder_id);
+
+alter table public.practice_passages enable row level security;
+
+drop policy if exists "Users can view own practice" on public.practice_passages;
+create policy "Users can view own practice" on public.practice_passages
+  for select using (auth.uid() = user_id);
+drop policy if exists "Users can insert own practice" on public.practice_passages;
+create policy "Users can insert own practice" on public.practice_passages
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can delete own practice" on public.practice_passages;
+create policy "Users can delete own practice" on public.practice_passages
+  for delete using (auth.uid() = user_id);
