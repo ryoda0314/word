@@ -9,7 +9,8 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    // viewport-fit:cover と合わせ、ステータスバー下までコンテンツを広げる
+    statusBarStyle: "black-translucent",
     title: "Wordtock",
   },
 };
@@ -19,6 +20,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // iPhone のセーフエリア（ノッチ・ホームインジケーター）まで画面を広げ、
+  // env(safe-area-inset-*) を有効にする
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -28,7 +32,8 @@ export default function RootLayout({
     <html lang="ja">
       <body className="min-h-dvh">
         <ServiceWorkerRegister />
-        <main className="mx-auto w-full max-w-md px-4 pt-6 pb-28">
+        {/* 上はノッチ/ステータスバー、下はナビ + ホームインジケーターのぶんを確保 */}
+        <main className="mx-auto w-full max-w-md px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[calc(7rem+env(safe-area-inset-bottom))]">
           {children}
         </main>
         <NavBar />

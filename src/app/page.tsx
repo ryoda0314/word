@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/components/LogoutButton";
+import StudyIndicator from "@/components/StudyIndicator";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,14 @@ export default async function HomePage() {
   let idiomCount = 0;
   let due = 0;
   let totalReviews = 0;
+  let recentDates: string[] = [];
   try {
     const nowIso = new Date().toISOString();
-    const [t, w, i, d, r] = await Promise.all([
+    // インジケータ用に直近8日間の last_reviewed を取得（日跨ぎ余白で 8 日）
+    const eightDaysAgoIso = new Date(
+      Date.now() - 8 * 86400000,
+    ).toISOString();
+    const [t, w, i, d, r, recent] = await Promise.all([
       supabase.from("words").select("*", { count: "exact", head: true }),
       supabase
         .from("words")
@@ -39,6 +45,10 @@ export default async function HomePage() {
         .select("*", { count: "exact", head: true })
         .lte("srs_due", nowIso),
       supabase.from("words").select("total_reviews"),
+      supabase
+        .from("words")
+        .select("last_reviewed")
+        .gte("last_reviewed", eightDaysAgoIso),
     ]);
     total = t.count ?? 0;
     wordCount = w.count ?? 0;
@@ -48,6 +58,11 @@ export default async function HomePage() {
       (sum, row) => sum + (row.total_reviews ?? 0),
       0,
     );
+    recentDates = (
+      (recent.data as { last_reviewed: string | null }[]) ?? []
+    )
+      .map((row) => row.last_reviewed)
+      .filter((s): s is string => !!s);
   } catch {
     // Supabase 未設定時はカウント 0 のまま表示する
   }
@@ -88,6 +103,8 @@ export default async function HomePage() {
           </span>
         </div>
       </Link>
+
+      <StudyIndicator isoDates={recentDates} dueCount={due} />
 
       <div className="grid grid-cols-3 gap-2.5">
         <div className="rounded-2xl border border-black/5 bg-white p-3.5 shadow-sm">
