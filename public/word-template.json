@@ -15,6 +15,7 @@
     "term": "break the ice",
     "language": "en",
     "kind": "idiom",
+    "part_of_speech": "慣用句",
     "meaning": "場を和ませる、緊張をほぐす",
     "example": "He told a joke to break the ice.",
     "example_translation": "彼は場を和ませるためにジョークを言った。"
@@ -25,6 +26,7 @@
     "kind": "idiom",
     "folder": "韓国語スラング",
     "reading": "シガン カヌン ジュル モルゴ",
+    "part_of_speech": "慣用表現",
     "meaning": "時間を忘れて、時間が経つのも忘れて",
     "example": "시간 가는 줄 모르고 이야기했어.",
     "example_translation": "時間を忘れて話した。"

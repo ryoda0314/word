@@ -57,6 +57,7 @@ const TEMPLATE = `[
     "term": "break the ice",
     "language": "en",
     "kind": "idiom",
+    "part_of_speech": "慣用句",
     "meaning": "場を和ませる、緊張をほぐす",
     "example": "He told a joke to break the ice.",
     "example_translation": "彼は場を和ませるためにジョークを言った。"
@@ -66,6 +67,7 @@ const TEMPLATE = `[
     "language": "ko",
     "kind": "idiom",
     "folder": "韓国語スラング",
+    "part_of_speech": "慣用表現",
     "meaning": "時間を忘れて、時間が経つのも忘れて",
     "example": "시간 가는 줄 모르고 이야기했어.",
     "example_translation": "時間を忘れて話した。"
@@ -146,20 +148,43 @@ function collectRows(text: string): { rows: unknown[]; error?: string } {
   return { rows };
 }
 
-// kind を寛容に判定。"idiom" / "慣用句" / "イディオム" / "i" 等を idiom に寄せる
-function detectKind(v: unknown, fallback: Kind): Kind {
-  if (typeof v !== "string") return fallback;
-  const s = v.toLowerCase();
-  if (
-    s.includes("idiom") ||
-    s.includes("phrase") ||
-    s.includes("慣用") ||
-    s.includes("熟語") ||
-    s.includes("イディオム")
-  ) {
-    return "idiom";
+// "idiom" / "慣用句" / "イディオム" / "熟語" / "表現" などを idiom に寄せる寛容な判定
+function looksLikeIdiom(s: string): boolean {
+  const t = s.toLowerCase();
+  return (
+    t.includes("idiom") ||
+    t.includes("phrase") ||
+    t.includes("expression") ||
+    t.includes("慣用") ||
+    t.includes("熟語") ||
+    t.includes("成句") ||
+    t.includes("イディオム") ||
+    t.includes("表現") || // "慣用表現" "会話表現" 等
+    t.includes("文型") ||
+    t.includes("文法")
+  );
+}
+
+// kind の判定優先度:
+//   1) kind フィールド（明示）
+//   2) part_of_speech に「慣用句」「表現」等が含まれていれば idiom（自動判定）
+//   3) フォールバック（UI で選んだデフォルト）
+function detectKind(
+  kindRaw: unknown,
+  posRaw: unknown,
+  fallback: Kind,
+): Kind {
+  if (typeof kindRaw === "string" && kindRaw.trim() !== "") {
+    const s = kindRaw.toLowerCase();
+    if (looksLikeIdiom(s)) return "idiom";
+    if (s.includes("word") || s.includes("単語")) return "word";
+    // 明示はあるが認識できない → フォールバック
+    return fallback;
   }
-  if (s.includes("word") || s.includes("単語")) return "word";
+  // kind 未指定なら、品詞から推定
+  if (typeof posRaw === "string" && posRaw.trim() !== "") {
+    if (looksLikeIdiom(posRaw)) return "idiom";
+  }
   return fallback;
 }
 
@@ -227,7 +252,7 @@ function parseInput(text: string, d: Defaults): ParseResult {
       }
     }
 
-    const kind = detectKind(r.kind, d.kind);
+    const kind = detectKind(r.kind, r.part_of_speech, d.kind);
     const folder_id = resolveFolder(r.folder ?? r.folder_id, d.folderId, d.folders);
 
     valid.push({
@@ -340,6 +365,15 @@ export default function ImportPage() {
             folder
           </code>
           はフォルダ名で指定できます（省略時は下のデフォルトを使用）。
+        </p>
+        <p className="text-[11px] leading-relaxed text-gray-400">
+          💡{" "}
+          <code className="rounded bg-gray-100 px-1 py-0.5">kind</code>{" "}
+          が無くても、
+          <code className="rounded bg-gray-100 px-1 py-0.5">
+            part_of_speech
+          </code>{" "}
+          に「慣用句」「慣用表現」「熟語」「表現」「文型」などが含まれていれば自動でイディオム扱いになります。
         </p>
 
         <pre className="max-h-56 overflow-auto rounded-xl bg-gray-900 p-3 text-[11px] leading-relaxed text-gray-100">
