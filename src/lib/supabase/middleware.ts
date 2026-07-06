@@ -30,9 +30,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
-  // /login と ScienceTokyo SSO の /auth/* は未ログインでも通す
-  const isAuthRoute = path.startsWith("/login") || path.startsWith("/auth");
+  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
