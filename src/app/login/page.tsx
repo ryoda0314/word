@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup";
+
+const SSO_ERRORS: Record<string, string> = {
+  login_required: "ScienceTokyo App にログインしてから、もう一度お試しください。",
+  state_mismatch: "セッションの検証に失敗しました。もう一度お試しください。",
+  exchange_failed: "ScienceTokyo との連携に失敗しました。",
+  session_failed: "ログイン処理に失敗しました。",
+  not_configured: "ScienceTokyo ログインは現在利用できません。",
+};
 
 const FIELD =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
@@ -17,6 +25,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [ssoError, setSsoError] = useState("");
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("sso_error");
+    if (code) setSsoError(SSO_ERRORS[code] || "ScienceTokyo ログインに失敗しました。");
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -163,6 +177,28 @@ export default function LoginPage() {
                 : "登録する"}
           </button>
         </form>
+
+        <div className="my-4 flex items-center gap-3 text-xs text-gray-400">
+          <span className="h-px flex-1 bg-gray-200" />
+          または
+          <span className="h-px flex-1 bg-gray-200" />
+        </div>
+
+        {ssoError && (
+          <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            {ssoError}
+          </p>
+        )}
+
+        <a
+          href="/auth/sciencetokyo"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3.5 font-semibold text-gray-700 shadow-sm transition active:scale-[0.99] hover:bg-gray-50"
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-orange-300 text-xs font-bold text-white">
+            ST
+          </span>
+          ScienceTokyo でログイン
+        </a>
       </div>
 
       <p className="text-center text-xs text-gray-400">
