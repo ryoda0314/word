@@ -40,12 +40,17 @@ type Defaults = {
 const FIELD =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
 
-const TEMPLATE = `[
+// テンプレートは、ユーザーが作成済みのフォルダ名を実際に差し込んで生成する。
+// フォルダが無いときは例として "TOEIC" / "韓国語スラング" を使う。
+function buildTemplate(folders: Folder[]): string {
+  const f1 = JSON.stringify(folders[0]?.name ?? "TOEIC");
+  const f2 = JSON.stringify(folders[1]?.name ?? folders[0]?.name ?? "韓国語スラング");
+  return `[
   {
     "term": "resilient",
     "language": "en",
     "kind": "word",
-    "folder": "TOEIC",
+    "folder": ${f1},
     "reading": "rɪˈzɪliənt",
     "part_of_speech": "形容詞",
     "meaning": "回復力のある、立ち直りが早い",
@@ -57,6 +62,7 @@ const TEMPLATE = `[
     "term": "break the ice",
     "language": "en",
     "kind": "idiom",
+    "folder": ${f1},
     "part_of_speech": "慣用句",
     "meaning": "場を和ませる、緊張をほぐす",
     "example": "He told a joke to break the ice.",
@@ -66,13 +72,14 @@ const TEMPLATE = `[
     "term": "시간 가는 줄 모르고",
     "language": "ko",
     "kind": "idiom",
-    "folder": "韓国語スラング",
+    "folder": ${f2},
     "part_of_speech": "慣用表現",
     "meaning": "時間を忘れて、時間が経つのも忘れて",
     "example": "시간 가는 줄 모르고 이야기했어.",
     "example_translation": "時間を忘れて話した。"
   }
 ]`;
+}
 
 function optStr(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -282,8 +289,12 @@ export default function ImportPage() {
   const [error, setError] = useState("");
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedFolder, setCopiedFolder] = useState<string | null>(null);
   // プレビューで個別に除外した件のインデックス（result.valid 基準）
   const [excluded, setExcluded] = useState<Set<number>>(new Set());
+
+  // 作成済みフォルダ名を反映したテンプレート
+  const template = useMemo(() => buildTemplate(folders), [folders]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -323,11 +334,21 @@ export default function ImportPage() {
 
   async function handleCopyTemplate() {
     try {
-      await navigator.clipboard.writeText(TEMPLATE);
+      await navigator.clipboard.writeText(template);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      setText(TEMPLATE);
+      setText(template);
+    }
+  }
+
+  async function copyFolderName(name: string) {
+    try {
+      await navigator.clipboard.writeText(name);
+      setCopiedFolder(name);
+      setTimeout(() => setCopiedFolder(null), 1500);
+    } catch {
+      // クリップボードが使えない環境は無視（表示だけでも役立つ）
     }
   }
 
@@ -395,8 +416,42 @@ export default function ImportPage() {
           に「慣用句」「慣用表現」「熟語」「表現」「文型」などが含まれていれば自動でイディオム扱いになります。
         </p>
 
+        {/* 作成済みフォルダ一覧（"folder" に指定できる名前） */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">
+            あなたのフォルダ（
+            <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
+              folder
+            </code>
+            にこの名前を指定できます）
+          </span>
+          {folders.length === 0 ? (
+            <p className="text-[11px] text-gray-400">
+              まだフォルダがありません。
+              <Link href="/folders" className="text-indigo-600 underline">
+                フォルダを作成
+              </Link>
+              すると、ここに一覧が表示されます。
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {folders.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => copyFolderName(f.name)}
+                  title="タップで名前をコピー"
+                  className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition active:scale-[0.97]"
+                >
+                  {copiedFolder === f.name ? "コピーしました" : `📁 ${f.name}`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <pre className="max-h-56 overflow-auto rounded-xl bg-gray-900 p-3 text-[11px] leading-relaxed text-gray-100">
-          {TEMPLATE}
+          {template}
         </pre>
 
         <div className="flex flex-wrap gap-2">
