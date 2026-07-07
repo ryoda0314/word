@@ -282,6 +282,8 @@ export default function ImportPage() {
   const [error, setError] = useState("");
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  // プレビューで個別に除外した件のインデックス（result.valid 基準）
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const supabase = createClient();
@@ -303,6 +305,22 @@ export default function ImportPage() {
     [text, defaultLang, defaultKind, defaultFolderId, folders],
   );
 
+  // 除外を反映した実際に追加する件
+  const finalValid = useMemo(
+    () => result.valid.filter((_, i) => !excluded.has(i)),
+    [result.valid, excluded],
+  );
+
+  function toggleExclude(index: number) {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+    setSavedCount(null);
+  }
+
   async function handleCopyTemplate() {
     try {
       await navigator.clipboard.writeText(TEMPLATE);
@@ -314,21 +332,22 @@ export default function ImportPage() {
   }
 
   async function handleImport() {
-    if (result.valid.length === 0) return;
+    if (finalValid.length === 0) return;
     setError("");
     setSavedCount(null);
     setSaving(true);
     const supabase = createClient();
     const { error: insertError } = await supabase
       .from("words")
-      .insert(result.valid);
+      .insert(finalValid);
     setSaving(false);
     if (insertError) {
       setError(insertError.message);
       return;
     }
-    setSavedCount(result.valid.length);
+    setSavedCount(finalValid.length);
     setText("");
+    setExcluded(new Set());
   }
 
   const hasInput = text.trim() !== "";
@@ -472,6 +491,7 @@ export default function ImportPage() {
             setText(e.target.value);
             setSavedCount(null);
             setError("");
+            setExcluded(new Set());
           }}
           rows={20}
           spellCheck={false}
@@ -482,8 +502,13 @@ export default function ImportPage() {
         {hasInput && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="font-semibold text-emerald-600">
-              追加できる: {result.valid.length} 件
+              追加できる: {finalValid.length} 件
             </span>
+            {excluded.size > 0 && (
+              <span className="font-semibold text-gray-400">
+                除外: {excluded.size} 件
+              </span>
+            )}
             {result.errors.length > 0 && (
               <span className="font-semibold text-red-500">
                 エラー: {result.errors.length} 件
@@ -504,7 +529,7 @@ export default function ImportPage() {
       {result.valid.length > 0 && (
         <section className="flex flex-col gap-2 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-bold text-gray-700">
-            プレビュー（{result.valid.length} 件）
+            プレビュー（{finalValid.length} 件）
           </h2>
           <ul className="flex max-h-72 flex-col divide-y divide-gray-100 overflow-auto">
             {result.valid.map((w, i) => {
@@ -513,8 +538,14 @@ export default function ImportPage() {
               const folderName = w.folder_id
                 ? folders.find((f) => f.id === w.folder_id)?.name
                 : null;
+              const isExcluded = excluded.has(i);
               return (
-                <li key={i} className="flex items-start gap-2.5 py-2">
+                <li
+                  key={i}
+                  className={`flex items-start gap-2.5 py-2 ${
+                    isExcluded ? "opacity-40" : ""
+                  }`}
+                >
                   <span
                     className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${meta.badgeClass}`}
                   >
@@ -526,7 +557,13 @@ export default function ImportPage() {
                     {kindMeta.label}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{w.term}</p>
+                    <p
+                      className={`truncate font-semibold ${
+                        isExcluded ? "line-through" : ""
+                      }`}
+                    >
+                      {w.term}
+                    </p>
                     <p className="truncate text-xs text-gray-500">
                       {w.meaning}
                     </p>
@@ -536,6 +573,18 @@ export default function ImportPage() {
                       </p>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleExclude(i)}
+                    aria-label={isExcluded ? "戻す" : "この件を除外"}
+                    className={`mt-0.5 shrink-0 rounded-lg border px-2 py-1 text-[11px] font-semibold transition active:scale-[0.97] ${
+                      isExcluded
+                        ? "border-gray-200 text-gray-500"
+                        : "border-red-200 text-red-600"
+                    }`}
+                  >
+                    {isExcluded ? "戻す" : "削除"}
+                  </button>
                 </li>
               );
             })}
@@ -560,13 +609,13 @@ export default function ImportPage() {
       <button
         type="button"
         onClick={handleImport}
-        disabled={saving || result.valid.length === 0}
+        disabled={saving || finalValid.length === 0}
         className="rounded-xl bg-indigo-600 py-3.5 font-semibold text-white shadow-sm shadow-indigo-500/25 transition active:scale-[0.99] disabled:opacity-40"
       >
         {saving
           ? "追加中…"
-          : result.valid.length > 0
-            ? `${result.valid.length} 件を追加する`
+          : finalValid.length > 0
+            ? `${finalValid.length} 件を追加する`
             : "JSON を貼り付けてください"}
       </button>
     </div>

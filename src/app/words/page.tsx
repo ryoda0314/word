@@ -32,6 +32,9 @@ function WordsPageInner() {
   const [langFilter, setLangFilter] = useState<LangFilter>("all");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [folderFilter, setFolderFilter] = useState<FolderFilter>(initialFolder);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -96,12 +99,95 @@ function WordsPageInner() {
       ? `/review?folder=${folderFilter}`
       : "/review";
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  const filteredIds = filtered.map((w) => w.id);
+  const allSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        filteredIds.forEach((id) => next.delete(id));
+      } else {
+        filteredIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!window.confirm(`選択した ${ids.length} 件を削除しますか？`)) return;
+    setDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("words").delete().in("id", ids);
+    setDeleting(false);
+    if (error) {
+      window.alert(`削除に失敗しました: ${error.message}`);
+      return;
+    }
+    exitSelectMode();
+    load();
+  }
+
   return (
     <div className="flex animate-rise flex-col gap-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold tracking-tight">単語一覧</h1>
-        <span className="text-sm text-gray-400">{filtered.length} 語</span>
+        {selectMode ? (
+          <button
+            type="button"
+            onClick={exitSelectMode}
+            className="rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-500"
+          >
+            キャンセル
+          </button>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-400">{filtered.length} 語</span>
+            {words.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectMode(true)}
+                className="rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-600"
+              >
+                選択
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {selectMode && (
+        <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/60 px-3.5 py-2 text-sm">
+          <span className="font-semibold text-indigo-700">
+            {selectedIds.size} 件を選択中
+          </span>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            disabled={filteredIds.length === 0}
+            className="font-semibold text-indigo-600 underline disabled:opacity-40"
+          >
+            {allSelected ? "選択を解除" : "すべて選択"}
+          </button>
+        </div>
+      )}
 
       <div className="relative">
         <svg
@@ -240,10 +326,34 @@ function WordsPageInner() {
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className={`flex flex-col gap-2.5 ${selectMode ? "pb-20" : ""}`}>
           {filtered.map((word) => (
-            <WordCard key={word.id} word={word} onChanged={load} />
+            <WordCard
+              key={word.id}
+              word={word}
+              onChanged={load}
+              selectionMode={selectMode}
+              selected={selectedIds.has(word.id)}
+              onToggleSelect={() => toggleSelect(word.id)}
+            />
           ))}
+        </div>
+      )}
+
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-black/5 bg-white/90 p-4 backdrop-blur">
+          <div className="mx-auto max-w-md">
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="w-full rounded-xl bg-red-600 py-3.5 font-semibold text-white shadow-sm shadow-red-500/25 transition active:scale-[0.99] disabled:opacity-50"
+            >
+              {deleting
+                ? "削除中…"
+                : `選択した ${selectedIds.size} 件を削除`}
+            </button>
+          </div>
         </div>
       )}
     </div>

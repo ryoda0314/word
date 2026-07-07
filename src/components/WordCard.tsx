@@ -14,6 +14,9 @@ import {
 type Props = {
   word: Word;
   onChanged: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 };
 
 const FIELD =
@@ -26,7 +29,13 @@ function dueInfo(srsDue: string) {
   return { label: `次の復習まで約 ${days} 日`, due: false };
 }
 
-export default function WordCard({ word, onChanged }: Props) {
+export default function WordCard({
+  word,
+  onChanged,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -228,12 +237,44 @@ export default function WordCard({ word, onChanged }: Props) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+    <div
+      className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition ${
+        selectionMode && selected
+          ? "border-indigo-400 ring-4 ring-indigo-500/10"
+          : "border-black/5"
+      }`}
+    >
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full p-4 text-left"
+        onClick={() =>
+          selectionMode ? onToggleSelect?.() : setExpanded((v) => !v)
+        }
+        className="flex w-full items-start gap-3 p-4 text-left"
       >
+        {selectionMode && (
+          <span
+            className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+              selected
+                ? "border-indigo-600 bg-indigo-600 text-white"
+                : "border-gray-300 bg-white"
+            }`}
+          >
+            {selected && (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-3 w-3"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            )}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -265,26 +306,29 @@ export default function WordCard({ word, onChanged }: Props) {
               <p className="text-xs text-gray-400">{word.reading}</p>
             )}
           </div>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform ${
-              expanded ? "rotate-180" : ""
-            }`}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+          {!selectionMode && (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform ${
+                expanded ? "rotate-180" : ""
+              }`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          )}
         </div>
         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
           {word.meaning}
         </p>
+        </div>
       </button>
 
-      {expanded && (
+      {expanded && !selectionMode && (
         <div className="flex animate-fade flex-col gap-2.5 border-t border-gray-100 px-4 pt-3 pb-4">
           {word.example && (
             <div className={`rounded-xl ${meta.softClass} px-3 py-2.5`}>
