@@ -156,7 +156,7 @@ export default async function HomePage() {
         <span className="flex flex-col">
           <span className="font-semibold">単語を追加</span>
           <span className="text-xs text-gray-500">
-            GPTが意味・発音・例文を自動生成
+            単語・意味・例文を登録
           </span>
         </span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="ml-auto h-5 w-5 text-gray-300">

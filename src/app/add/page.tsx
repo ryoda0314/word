@@ -34,30 +34,15 @@ const EMPTY: Form = {
 const FIELD =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
 
-function FieldSkeleton() {
-  return (
-    <div className="flex flex-col gap-3">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="flex flex-col gap-2">
-          <div className="h-3 w-16 rounded bg-gray-200" />
-          <div className="h-11 w-full rounded-xl bg-gray-100" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function AddPage() {
   const [language, setLanguage] = useState<Language>("en");
   const [kind, setKind] = useState<Kind>("word");
   const [folderId, setFolderId] = useState<string>(""); // "" = フォルダなし
   const [folders, setFolders] = useState<Folder[]>([]);
   const [form, setForm] = useState<Form>(EMPTY);
-  const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [touched, setTouched] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -70,39 +55,6 @@ export default function AddPage() {
 
   function update<K extends keyof Form>(key: K, value: Form[K]) {
     setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  async function handleGenerate() {
-    if (!form.term.trim()) {
-      setError("単語を入力してください");
-      return;
-    }
-    setError("");
-    setSaved(false);
-    setGenerating(true);
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ term: form.term, language }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成に失敗しました");
-      setForm((f) => ({
-        ...f,
-        term: data.term || f.term,
-        reading: data.reading || "",
-        part_of_speech: data.part_of_speech || "",
-        meaning: data.meaning || "",
-        example: data.example || "",
-        example_translation: data.example_translation || "",
-      }));
-      setTouched(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
-    } finally {
-      setGenerating(false);
-    }
   }
 
   async function handleSave() {
@@ -131,7 +83,6 @@ export default function AddPage() {
       return;
     }
     setForm(EMPTY);
-    setTouched(false);
     setSaved(true);
   }
 
@@ -150,7 +101,7 @@ export default function AddPage() {
       </div>
 
       <section className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-bold text-gray-700">調べる単語</h2>
+        <h2 className="text-sm font-bold text-gray-700">単語</h2>
 
         <div className="flex rounded-xl bg-gray-100 p-1 text-sm font-semibold">
           {(["en", "ko"] as Language[]).map((lang) => {
@@ -182,7 +133,9 @@ export default function AddPage() {
                 type="button"
                 onClick={() => setKind(k)}
                 className={`flex-1 rounded-lg py-2 transition ${
-                  active ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500"
+                  active
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-gray-500"
                 }`}
               >
                 {KIND_META[k].label}
@@ -191,36 +144,20 @@ export default function AddPage() {
           })}
         </div>
 
-        <div className="flex gap-2">
-          <input
-            value={form.term}
-            onChange={(e) => update("term", e.target.value)}
-            placeholder={
-              kind === "idiom"
-                ? language === "en"
-                  ? "例: break the ice"
-                  : "例: 시간 가는 줄 모르고"
-                : language === "en"
-                  ? "例: resilient"
-                  : "例: 반갑다"
-            }
-            className={`${FIELD} flex-1`}
-          />
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={generating}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-indigo-500/25 transition active:scale-[0.97] disabled:opacity-50"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-              <path d="M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9L12 2.5zM18.5 14l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4z" />
-            </svg>
-            {generating ? "生成中…" : "GPT生成"}
-          </button>
-        </div>
-        <p className="text-xs text-gray-400">
-          単語を入力して「GPT生成」を押すと、意味・発音・例文を自動で埋めます。
-        </p>
+        <input
+          value={form.term}
+          onChange={(e) => update("term", e.target.value)}
+          placeholder={
+            kind === "idiom"
+              ? language === "en"
+                ? "例: break the ice"
+                : "例: 시간 가는 줄 모르고"
+              : language === "en"
+                ? "例: resilient"
+                : "例: 반갑다"
+          }
+          className={FIELD}
+        />
       </section>
 
       {/* フォルダ選択（任意） */}
@@ -251,78 +188,66 @@ export default function AddPage() {
       <section className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-bold text-gray-700">内容</h2>
 
-        {generating ? (
-          <FieldSkeleton />
-        ) : (
-          <>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-500">
-                発音・読み
-              </span>
-              <input
-                value={form.reading}
-                onChange={(e) => update("reading", e.target.value)}
-                className={FIELD}
-              />
-            </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">発音・読み</span>
+          <input
+            value={form.reading}
+            onChange={(e) => update("reading", e.target.value)}
+            className={FIELD}
+          />
+        </label>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-500">品詞</span>
-              <input
-                value={form.part_of_speech}
-                onChange={(e) => update("part_of_speech", e.target.value)}
-                className={FIELD}
-              />
-            </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">品詞</span>
+          <input
+            value={form.part_of_speech}
+            onChange={(e) => update("part_of_speech", e.target.value)}
+            className={FIELD}
+          />
+        </label>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-500">
-                意味 <span className="text-red-500">*</span>
-              </span>
-              <textarea
-                value={form.meaning}
-                onChange={(e) => update("meaning", e.target.value)}
-                rows={2}
-                className={`${FIELD} resize-y`}
-              />
-            </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">
+            意味 <span className="text-red-500">*</span>
+          </span>
+          <textarea
+            value={form.meaning}
+            onChange={(e) => update("meaning", e.target.value)}
+            rows={2}
+            className={`${FIELD} resize-y`}
+          />
+        </label>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-500">例文</span>
-              <textarea
-                value={form.example}
-                onChange={(e) => update("example", e.target.value)}
-                rows={2}
-                className={`${FIELD} resize-y`}
-              />
-            </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">例文</span>
+          <textarea
+            value={form.example}
+            onChange={(e) => update("example", e.target.value)}
+            rows={2}
+            className={`${FIELD} resize-y`}
+          />
+        </label>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-500">
-                例文の訳
-              </span>
-              <textarea
-                value={form.example_translation}
-                onChange={(e) =>
-                  update("example_translation", e.target.value)
-                }
-                rows={2}
-                className={`${FIELD} resize-y`}
-              />
-            </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">例文の訳</span>
+          <textarea
+            value={form.example_translation}
+            onChange={(e) => update("example_translation", e.target.value)}
+            rows={2}
+            className={`${FIELD} resize-y`}
+          />
+        </label>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-500">メモ</span>
-              <textarea
-                value={form.notes}
-                onChange={(e) => update("notes", e.target.value)}
-                rows={2}
-                placeholder="覚えるためのヒントなど（任意）"
-                className={`${FIELD} resize-y`}
-              />
-            </label>
-          </>
-        )}
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-500">メモ</span>
+          <textarea
+            value={form.notes}
+            onChange={(e) => update("notes", e.target.value)}
+            rows={2}
+            placeholder="覚えるためのヒントなど（任意）"
+            className={`${FIELD} resize-y`}
+          />
+        </label>
       </section>
 
       {error && (
@@ -345,7 +270,7 @@ export default function AddPage() {
         disabled={saving || !canSave}
         className="rounded-xl bg-indigo-600 py-3.5 font-semibold text-white shadow-sm shadow-indigo-500/25 transition active:scale-[0.99] disabled:opacity-40"
       >
-        {saving ? "保存中…" : touched || canSave ? "保存する" : "単語を入力してください"}
+        {saving ? "保存中…" : canSave ? "保存する" : "単語を入力してください"}
       </button>
     </div>
   );
