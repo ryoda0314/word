@@ -11,12 +11,15 @@ import {
   type Language,
 } from "@/lib/types";
 
-// 一括追加で受け付ける1語ぶんのペイロード（DB の words テーブルに insert する形）
+// 一括追加で受け付ける1語ぶんのペイロード（DB の words テーブルに insert する前段の中間表現）
+// folder_id が null で folder_name_to_create が設定されている場合、
+// import 時にそのフォルダを新規作成してから、このレコードに紐づける。
 type WordInput = {
   term: string;
   language: Language;
   kind: Kind;
   folder_id: string | null;
+  folder_name_to_create: string | null;
   reading: string | null;
   part_of_speech: string | null;
   meaning: string;
@@ -195,22 +198,25 @@ function detectKind(
   return fallback;
 }
 
-// folder は ID または名前のどちらでも受け付ける（名前は完全一致で folders から検索）
+// folder は ID または名前のどちらでも受け付ける。
+//   - 既存フォルダの ID / 名前に一致 → その folder_id を使う
+//   - 一致しない名前 → 新規作成対象として folder_name_to_create に入れる
+//   - 未指定 → UI のデフォルトを使う
 function resolveFolder(
   v: unknown,
   defaultId: string,
   folders: Folder[],
-): string | null {
+): { folder_id: string | null; folder_name_to_create: string | null } {
   if (typeof v !== "string" || v.trim() === "") {
-    return defaultId || null;
+    return { folder_id: defaultId || null, folder_name_to_create: null };
   }
   const t = v.trim();
   const byId = folders.find((f) => f.id === t);
-  if (byId) return byId.id;
+  if (byId) return { folder_id: byId.id, folder_name_to_create: null };
   const byName = folders.find((f) => f.name === t);
-  if (byName) return byName.id;
-  // 解決できないときはデフォルトを使う（ない場合 null）
-  return defaultId || null;
+  if (byName) return { folder_id: byName.id, folder_name_to_create: null };
+  // 既存に無い名前 → その名前で新規作成する
+  return { folder_id: null, folder_name_to_create: t };
 }
 
 function parseInput(text: string, d: Defaults): ParseResult {
@@ -260,13 +266,18 @@ function parseInput(text: string, d: Defaults): ParseResult {
     }
 
     const kind = detectKind(r.kind, r.part_of_speech, d.kind);
-    const folder_id = resolveFolder(r.folder ?? r.folder_id, d.folderId, d.folders);
+    const { folder_id, folder_name_to_create } = resolveFolder(
+      r.folder ?? r.folder_id,
+      d.folderId,
+      d.folders,
+    );
 
     valid.push({
       term,
       language,
       kind,
       folder_id,
+      folder_name_to_create,
       reading: optStr(r.reading),
       part_of_speech: optStr(r.part_of_speech),
       meaning,
@@ -322,6 +333,19 @@ export default function ImportPage() {
     [result.valid, excluded],
   );
 
+  // 追加時に新規作成されるフォルダ名（重複排除）
+  const newFolderNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          finalValid
+            .map((w) => w.folder_name_to_create)
+            .filter((n): n is string => !!n),
+        ),
+      ),
+    [finalValid],
+  );
+
   function toggleExclude(index: number) {
     setExcluded((prev) => {
       const next = new Set(prev);
@@ -358,13 +382,54 @@ export default function ImportPage() {
     setSavedCount(null);
     setSaving(true);
     const supabase = createClient();
-    const { error: insertError } = await supabase
-      .from("words")
-      .insert(finalValid);
+
+    // 名前 → folder_id の対応表（既存 + 新規）
+    // newFolderNames は JSON に出てきた未知のフォルダ名（useMemo で算出済み）
+    const nameToId = new Map<string, string>();
+    if (newFolderNames.length > 0) {
+      const { data: created, error: folderError } = await supabase
+        .from("folders")
+        .insert(newFolderNames.map((name) => ({ name })))
+        .select("id, name");
+      if (folderError) {
+        setSaving(false);
+        setError(`フォルダの作成に失敗しました: ${folderError.message}`);
+        return;
+      }
+      (created as { id: string; name: string }[] | null)?.forEach((f) => {
+        nameToId.set(f.name, f.id);
+      });
+    }
+
+    // 2) folder_name_to_create を実際の folder_id に置き換え、DB に無い列は落とす
+    const rows = finalValid.map((w) => ({
+      term: w.term,
+      language: w.language,
+      kind: w.kind,
+      folder_id: w.folder_name_to_create
+        ? (nameToId.get(w.folder_name_to_create) ?? null)
+        : w.folder_id,
+      reading: w.reading,
+      part_of_speech: w.part_of_speech,
+      meaning: w.meaning,
+      example: w.example,
+      example_translation: w.example_translation,
+      notes: w.notes,
+    }));
+
+    const { error: insertError } = await supabase.from("words").insert(rows);
     setSaving(false);
     if (insertError) {
       setError(insertError.message);
       return;
+    }
+    // 作成したフォルダを一覧に反映（次回以降のプレビュー用）
+    if (newFolderNames.length > 0) {
+      const { data } = await supabase
+        .from("folders")
+        .select("*")
+        .order("created_at", { ascending: false });
+      setFolders((data as Folder[]) ?? []);
     }
     setSavedCount(finalValid.length);
     setText("");
@@ -405,6 +470,7 @@ export default function ImportPage() {
             folder
           </code>
           はフォルダ名で指定できます（省略時は下のデフォルトを使用）。
+          存在しないフォルダ名なら、追加時にそのフォルダを自動で作成します。
         </p>
         <p className="text-[11px] leading-relaxed text-gray-400">
           💡{" "}
@@ -564,12 +630,23 @@ export default function ImportPage() {
                 除外: {excluded.size} 件
               </span>
             )}
+            {newFolderNames.length > 0 && (
+              <span className="font-semibold text-indigo-600">
+                新規フォルダ: {newFolderNames.length} 個
+              </span>
+            )}
             {result.errors.length > 0 && (
               <span className="font-semibold text-red-500">
                 エラー: {result.errors.length} 件
               </span>
             )}
           </div>
+        )}
+        {newFolderNames.length > 0 && (
+          <p className="rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+            📁 追加時に次のフォルダを新規作成します:{" "}
+            <span className="font-semibold">{newFolderNames.join("、")}</span>
+          </p>
         )}
 
         {result.errors.length > 0 && (
@@ -590,9 +667,12 @@ export default function ImportPage() {
             {result.valid.map((w, i) => {
               const meta = LANGUAGE_META[w.language];
               const kindMeta = KIND_META[w.kind];
-              const folderName = w.folder_id
-                ? folders.find((f) => f.id === w.folder_id)?.name
-                : null;
+              const folderName = w.folder_name_to_create
+                ? w.folder_name_to_create
+                : w.folder_id
+                  ? folders.find((f) => f.id === w.folder_id)?.name
+                  : null;
+              const isNewFolder = !!w.folder_name_to_create;
               const isExcluded = excluded.has(i);
               return (
                 <li
@@ -625,6 +705,11 @@ export default function ImportPage() {
                     {folderName && (
                       <p className="truncate text-[10px] text-indigo-500">
                         📁 {folderName}
+                        {isNewFolder && (
+                          <span className="ml-1 rounded bg-emerald-100 px-1 py-0.5 font-bold text-emerald-700">
+                            新規作成
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
