@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import WordCard from "@/components/WordCard";
+import { isLeech } from "@/lib/srs";
 import type { Folder, Kind, Language, Word } from "@/lib/types";
 
 type LangFilter = "all" | Language;
@@ -32,6 +33,7 @@ function WordsPageInner() {
   const [langFilter, setLangFilter] = useState<LangFilter>("all");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [folderFilter, setFolderFilter] = useState<FolderFilter>(initialFolder);
+  const [leechOnly, setLeechOnly] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -53,6 +55,7 @@ function WordsPageInner() {
 
   const filtered = words.filter((w) => {
     const kind = w.kind ?? "word";
+    if (leechOnly && !isLeech(w)) return false;
     if (langFilter !== "all" && w.language !== langFilter) return false;
     if (kindFilter !== "all" && kind !== kindFilter) return false;
     if (folderFilter === "none" && w.folder_id) return false;
@@ -261,6 +264,32 @@ function WordsPageInner() {
           </button>
         ))}
       </div>
+
+      {/* リーチ（何度も忘れる単語）フィルタ */}
+      {words.some(isLeech) && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setLeechOnly((v) => !v)}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+              leechOnly
+                ? "bg-red-600 text-white"
+                : "border border-red-200 bg-white text-red-600"
+            }`}
+          >
+            リーチのみ
+            <span className={leechOnly ? "text-red-200" : "text-red-300"}>
+              {" "}
+              {words.filter(isLeech).length}
+            </span>
+          </button>
+          {leechOnly && (
+            <span className="self-center text-[11px] text-gray-400">
+              何度も忘れている単語。メモや例文を見直すのが効果的
+            </span>
+          )}
+        </div>
+      )}
 
       {/* フォルダフィルタ */}
       {folders.length > 0 && (

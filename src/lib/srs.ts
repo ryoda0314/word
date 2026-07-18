@@ -52,6 +52,13 @@ export function phaseOf(state: SrsState): SrsPhase {
   return state.srs_interval >= 1 ? "review" : "learning";
 }
 
+// リーチ: 何度も忘れている単語（Anki と同じ閾値）。暗記のやり方を変えるサイン
+export const LEECH_THRESHOLD = 8;
+
+export function isLeech(state: Pick<SrsState, "srs_lapses">): boolean {
+  return state.srs_lapses >= LEECH_THRESHOLD;
+}
+
 type Next = {
   reps: number;
   interval: number;

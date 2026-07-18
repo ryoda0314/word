@@ -4,7 +4,18 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { applyGrade, nextIntervalLabel, phaseOf, type Grade } from "@/lib/srs";
+import {
+  applyGrade,
+  isLeech,
+  nextIntervalLabel,
+  phaseOf,
+  type Grade,
+} from "@/lib/srs";
+import {
+  NEW_LIMIT_OPTIONS,
+  remainingNewAllowance,
+  useNewLimit,
+} from "@/lib/settings";
 import {
   KIND_META,
   LANGUAGE_META,
@@ -75,6 +86,9 @@ function ReviewPageInner() {
   const [scope, setScope] = useState<Scope>("due");
   const [order, setOrder] = useState<Order>("due_asc");
   const [size, setSize] = useState<SizeOption>(20);
+  // 新規カードの1日上限（0 = 無制限）と、今日すでに始めた新規の枚数
+  const [newLimit, setNewLimit] = useNewLimit();
+  const [introducedToday, setIntroducedToday] = useState(0);
 
   // 進行中セット
   const [queue, setQueue] = useState<Word[]>([]);
@@ -85,15 +99,24 @@ function ReviewPageInner() {
 
   useEffect(() => {
     const supabase = createClient();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
     Promise.all([
       supabase.from("words").select("*"),
       supabase
         .from("folders")
         .select("*")
         .order("created_at", { ascending: false }),
-    ]).then(([w, f]) => {
+      // 今日すでに学習を始めた新規カードの枚数（ログ未整備なら 0 扱い）
+      supabase
+        .from("review_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("was_new", true)
+        .gte("reviewed_at", startOfToday.toISOString()),
+    ]).then(([w, f, n]) => {
       setAllWords((w.data as Word[]) ?? []);
       setFolders((f.data as Folder[]) ?? []);
+      setIntroducedToday(n.count ?? 0);
       setLoading(false);
     });
   }, []);
@@ -117,22 +140,38 @@ function ReviewPageInner() {
     });
   }, [allWords, folderFilter, langFilter, kindFilter, scope]);
 
+  // 新規カードの1日上限を「今日の復習」に適用する（登録が古い順に採用、あふれた分は明日以降）
+  const newAllowance = remainingNewAllowance(newLimit, introducedToday);
+  const { sessionPool, heldBackNew } = useMemo(() => {
+    const isNewCard = (w: Word) => (w.total_reviews ?? 0) === 0;
+    if (scope !== "due" || newLimit === 0)
+      return { sessionPool: eligible, heldBackNew: 0 };
+    const newOnes = eligible
+      .filter(isNewCard)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const keep = new Set(newOnes.slice(0, newAllowance).map((w) => w.id));
+    return {
+      sessionPool: eligible.filter((w) => !isNewCard(w) || keep.has(w.id)),
+      heldBackNew: newOnes.length - keep.size,
+    };
+  }, [eligible, scope, newLimit, newAllowance]);
+
   // 対象の内訳（新規 / 学習ステップ中 / 復習）
   const breakdown = useMemo(() => {
     let fresh = 0;
     let learning = 0;
     let review = 0;
-    for (const w of eligible) {
+    for (const w of sessionPool) {
       if ((w.total_reviews ?? 0) === 0) fresh += 1;
       else if (phaseOf(w) === "review") review += 1;
       else learning += 1;
     }
     return { fresh, learning, review };
-  }, [eligible]);
+  }, [sessionPool]);
 
   // 開始ボタン押下時に最終的に並べるキュー
   function buildQueue(): Word[] {
-    let arr = eligible.slice();
+    let arr = sessionPool.slice();
     if (order === "due_asc") {
       arr.sort((a, b) => a.srs_due.localeCompare(b.srs_due));
     } else if (order === "new_first") {
@@ -144,7 +183,8 @@ function ReviewPageInner() {
     return arr;
   }
 
-  const previewCount = size === 0 ? eligible.length : Math.min(size, eligible.length);
+  const previewCount =
+    size === 0 ? sessionPool.length : Math.min(size, sessionPool.length);
 
   // セッション完了判定（キューが尽きたら done へ）
   useEffect(() => {
@@ -195,19 +235,22 @@ function ReviewPageInner() {
       return;
     }
 
-    // 復習ログ（ヒートマップ・定着率用）。失敗してもセッションは止めない
+    // 復習ログ（ヒートマップ・定着率・新規上限用）。失敗してもセッションは止めない
     void supabase
       .from("review_logs")
       .insert({
         word_id: current.id,
         grade,
         phase: phaseOf(current),
+        was_new: baseTotal === 0,
         interval_before: current.srs_interval,
         interval_after: update.srs_interval,
         ease_after: update.srs_ease,
       })
       .then(() => {});
 
+    // 初学習なら「今日の新規」を消費する
+    if (baseTotal === 0) setIntroducedToday((c) => c + 1);
     setReviewedCount((c) => c + 1);
     if (isCorrect) setCorrectCount((c) => c + 1);
     setRevealed(false);
@@ -279,7 +322,7 @@ function ReviewPageInner() {
           <button
             type="button"
             onClick={startSession}
-            disabled={eligible.length === 0}
+            disabled={sessionPool.length === 0}
             className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-500/25 disabled:opacity-40"
           >
             同じ条件でもう一度
@@ -355,6 +398,11 @@ function ReviewPageInner() {
             >
               {phaseMeta.label}
             </span>
+            {isLeech(current) && (
+              <span className="rounded-md bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-600">
+                リーチ
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold break-words">{current.term}</p>
           {current.part_of_speech && (
@@ -427,9 +475,16 @@ function ReviewPageInner() {
   // ───────────────────────────────────────────────
   // 設定画面
   // ───────────────────────────────────────────────
-  const dueAllCount = allWords.filter(
-    (w) => new Date(w.srs_due) <= new Date(),
+  // ヘッダの「今日の復習」枚数（新規は1日上限まで数える）
+  const nowForCount = new Date();
+  const dueWords = allWords.filter((w) => new Date(w.srs_due) <= nowForCount);
+  const dueNewCount = dueWords.filter(
+    (w) => (w.total_reviews ?? 0) === 0,
   ).length;
+  const dueAllCount =
+    dueWords.length -
+    dueNewCount +
+    (newLimit === 0 ? dueNewCount : Math.min(dueNewCount, newAllowance));
 
   return (
     <div className="flex animate-rise flex-col gap-4">
@@ -595,6 +650,36 @@ function ReviewPageInner() {
         </label>
       </section>
 
+      {/* 新規カードの1日上限 */}
+      <section className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-bold text-gray-700">新規カード（1日の上限）</h2>
+        <div className="flex flex-wrap gap-2">
+          {NEW_LIMIT_OPTIONS.map((n) => {
+            const active = newLimit === n;
+            const label = n === 0 ? "無制限" : `${n} 枚`;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setNewLimit(n)}
+                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition ${
+                  active
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-gray-200 bg-white text-gray-500"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-500">
+          {newLimit === 0
+            ? "新しい単語を無制限に始めます。数日後の復習が一気に増える点に注意。"
+            : `今日はあと ${Math.max(0, newLimit - introducedToday)} 枚の新規を始められます。毎日少しずつ始めることで、数日後の復習の山を防ぎます。`}
+        </p>
+      </section>
+
       {/* 問題数 */}
       <section className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-bold text-gray-700">問題数</h2>
@@ -619,10 +704,10 @@ function ReviewPageInner() {
           })}
         </div>
         <p className="text-xs text-gray-500">
-          対象 <span className="font-semibold text-gray-700">{eligible.length}</span> 枚 → このセットは{" "}
+          対象 <span className="font-semibold text-gray-700">{sessionPool.length}</span> 枚 → このセットは{" "}
           <span className="font-semibold text-indigo-600">{previewCount}</span> 枚出題
         </p>
-        {eligible.length > 0 && (
+        {sessionPool.length > 0 && (
           <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
             <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-700">
               新規 {breakdown.fresh}
@@ -634,6 +719,11 @@ function ReviewPageInner() {
               復習 {breakdown.review}
             </span>
           </div>
+        )}
+        {heldBackNew > 0 && (
+          <p className="text-[11px] text-gray-400">
+            1日の新規上限により、新規 {heldBackNew} 枚は明日以降に持ち越します。
+          </p>
         )}
       </section>
 

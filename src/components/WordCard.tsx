@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { phaseOf } from "@/lib/srs";
+import { isLeech, phaseOf } from "@/lib/srs";
 import {
   KIND_META,
   LANGUAGE_META,
@@ -315,6 +315,11 @@ export default function WordCard({
               >
                 {phaseMeta.label}
               </span>
+              {isLeech(word) && (
+                <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                  リーチ
+                </span>
+              )}
               {due.due && (
                 <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
                   復習日
@@ -395,6 +400,12 @@ export default function WordCard({
             </div>
           </div>
           <p className="text-[11px] text-gray-400">{due.label}</p>
+          {isLeech(word) && (
+            <p className="rounded-xl bg-red-50 px-3 py-2.5 text-xs text-red-600">
+              この単語は {word.srs_lapses} 回忘れています。語呂合わせ・イメージ・
+              自分の言葉のメモを追加するなど、覚え方を変えると効果的です。
+            </p>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button

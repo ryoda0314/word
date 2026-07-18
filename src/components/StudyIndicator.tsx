@@ -1,12 +1,21 @@
 "use client";
 
 import { useMemo } from "react";
+import {
+  countLocalToday,
+  remainingNewAllowance,
+  useNewLimit,
+} from "@/lib/settings";
 
 type Props = {
   // 復習イベントのタイムスタンプ（直近8日ぶん。review_logs 由来、無ければ last_reviewed）
   isoDates: string[];
-  // 今日まだ残っている復習枚数
-  dueCount: number;
+  // 期日到来のうち未学習（新規）の枚数
+  dueNew: number;
+  // 期日到来のうち学習済み（学習中 + 復習）の枚数
+  dueOther: number;
+  // 直近の新規導入ログの時刻（今日の新規消費数を出す）
+  newLogTimes: string[];
   // 今後7日以内に期日が来る単語の srs_due（今日超過ぶんは含まない）
   upcomingDue: string[];
   // 直近7日間の定着率（again 以外の割合、%）。ログが無ければ null
@@ -24,10 +33,20 @@ const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
 export default function StudyIndicator({
   isoDates,
-  dueCount,
+  dueNew,
+  dueOther,
+  newLogTimes,
   upcomingDue,
   retention,
 }: Props) {
+  // 「今日の復習」は新規を1日上限までしか数えない（DueTodayCard と同じ計算）
+  const [newLimit] = useNewLimit();
+  const dueCount =
+    dueOther +
+    Math.min(
+      dueNew,
+      remainingNewAllowance(newLimit, countLocalToday(newLogTimes)),
+    );
   // タイムゾーンはユーザーのローカル基準。クライアント側で日付バケットを作る
   const { todayCount, days, forecast } = useMemo(() => {
     const counts = new Map<string, number>();

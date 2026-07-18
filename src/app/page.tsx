@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import DueTodayCard from "@/components/DueTodayCard";
 import LogoutButton from "@/components/LogoutButton";
 import StudyIndicator from "@/components/StudyIndicator";
 
@@ -22,9 +23,11 @@ export default async function HomePage() {
   let wordCount = 0;
   let idiomCount = 0;
   let due = 0;
+  let dueNew = 0;
   let totalReviews = 0;
   let recentDates: string[] = [];
   let upcomingDue: string[] = [];
+  let newLogTimes: string[] = [];
   let retention: number | null = null;
   try {
     const nowIso = new Date().toISOString();
@@ -35,7 +38,7 @@ export default async function HomePage() {
     const sevenDaysAheadIso = new Date(
       Date.now() + 7 * 86400000,
     ).toISOString();
-    const [t, w, i, d, r, logs, fallback, upcoming] = await Promise.all([
+    const [t, w, i, d, dn, r, logs, fallback, upcoming, newLogs] = await Promise.all([
       supabase.from("words").select("*", { count: "exact", head: true }),
       supabase
         .from("words")
@@ -49,6 +52,12 @@ export default async function HomePage() {
         .from("words")
         .select("*", { count: "exact", head: true })
         .lte("srs_due", nowIso),
+      // 期日到来のうち未学習（新規）。1日上限の計算に使う
+      supabase
+        .from("words")
+        .select("*", { count: "exact", head: true })
+        .lte("srs_due", nowIso)
+        .eq("total_reviews", 0),
       supabase.from("words").select("total_reviews"),
       // 1 採点 = 1 行の正確な履歴（ヒートマップ・定着率用）
       supabase
@@ -66,11 +75,18 @@ export default async function HomePage() {
         .select("srs_due")
         .gt("srs_due", nowIso)
         .lte("srs_due", sevenDaysAheadIso),
+      // 直近の新規導入ログ（「今日始めた新規」の枚数はクライアント側でローカル日付判定）
+      supabase
+        .from("review_logs")
+        .select("reviewed_at")
+        .eq("was_new", true)
+        .gte("reviewed_at", new Date(Date.now() - 48 * 3600000).toISOString()),
     ]);
     total = t.count ?? 0;
     wordCount = w.count ?? 0;
     idiomCount = i.count ?? 0;
     due = d.count ?? 0;
+    dueNew = dn.count ?? 0;
     totalReviews = ((r.data as { total_reviews: number }[]) ?? []).reduce(
       (sum, row) => sum + (row.total_reviews ?? 0),
       0,
@@ -92,6 +108,11 @@ export default async function HomePage() {
     upcomingDue = ((upcoming.data as { srs_due: string }[]) ?? []).map(
       (row) => row.srs_due,
     );
+    newLogTimes = newLogs.error
+      ? []
+      : (((newLogs.data as { reviewed_at: string }[]) ?? []).map(
+          (row) => row.reviewed_at,
+        ));
   } catch {
     // Supabase 未設定時はカウント 0 のまま表示する
   }
@@ -108,34 +129,17 @@ export default async function HomePage() {
         )}
       </header>
 
-      <Link
-        href="/review"
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 p-6 text-white shadow-lg shadow-indigo-500/25 transition active:scale-[0.99]"
-      >
-        <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
-        <div className="pointer-events-none absolute -bottom-12 -left-6 h-32 w-32 rounded-full bg-white/10" />
-        <div className="relative">
-          <p className="text-sm font-medium text-indigo-100">今日の復習</p>
-          <p className="mt-1 flex items-end gap-1.5">
-            <span className="text-5xl font-bold tabular-nums leading-none">
-              {due}
-            </span>
-            <span className="pb-1 text-base font-medium text-indigo-100">
-              枚
-            </span>
-          </p>
-          <span className="mt-4 inline-flex items-center gap-1 rounded-full bg-white/15 px-3.5 py-1.5 text-sm font-semibold backdrop-blur">
-            {due > 0 ? "復習をはじめる" : "今日の復習は完了"}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="M5 12h14M13 5l7 7-7 7" />
-            </svg>
-          </span>
-        </div>
-      </Link>
+      <DueTodayCard
+        dueNew={dueNew}
+        dueOther={Math.max(0, due - dueNew)}
+        newLogTimes={newLogTimes}
+      />
 
       <StudyIndicator
         isoDates={recentDates}
-        dueCount={due}
+        dueNew={dueNew}
+        dueOther={Math.max(0, due - dueNew)}
+        newLogTimes={newLogTimes}
         upcomingDue={upcomingDue}
         retention={retention}
       />

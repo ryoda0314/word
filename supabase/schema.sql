@@ -115,11 +115,15 @@ create table if not exists public.review_logs (
   word_id          uuid references public.words (id) on delete set null,
   grade            text not null check (grade in ('again', 'hard', 'good', 'easy')),
   phase            text not null default 'review',  -- 採点時点のフェーズ
+  was_new          boolean not null default false,  -- この採点が初学習（新規カードの導入）だったか
   interval_before  integer not null default 0,
   interval_after   integer not null default 0,
   ease_after       numeric not null default 2.5,
   reviewed_at      timestamptz not null default now()
 );
+
+-- 既存テーブルにも上記カラムを足す（初回作成時は no-op）
+alter table public.review_logs add column if not exists was_new boolean not null default false;
 
 create index if not exists review_logs_user_time_idx on public.review_logs (user_id, reviewed_at desc);
 
