@@ -1,3 +1,5 @@
+import type { Grade, SrsPhase } from "./srs";
+
 export type Language = "en" | "ko";
 
 export type LanguageMeta = {
@@ -66,11 +68,33 @@ export type Word = {
   srs_interval: number;
   srs_ease: number;
   srs_lapses: number;
+  srs_phase: SrsPhase | null;
+  srs_step: number | null;
   srs_due: string;
   last_reviewed: string | null;
   total_reviews: number;
   correct_reviews: number;
   created_at: string;
+};
+
+// 学習フェーズの表示用メタ（新規 = total_reviews === 0 は phase とは別に扱う）
+export const SRS_PHASE_META: Record<SrsPhase, { label: string; badgeClass: string }> = {
+  learning: { label: "学習中", badgeClass: "bg-amber-100 text-amber-700" },
+  relearning: { label: "覚え直し", badgeClass: "bg-orange-100 text-orange-700" },
+  review: { label: "復習", badgeClass: "bg-emerald-100 text-emerald-700" },
+};
+
+// 復習ログ（1 採点 = 1 行。ヒートマップ・定着率の計算に使う）
+export type ReviewLog = {
+  id: string;
+  user_id: string;
+  word_id: string | null;
+  grade: Grade;
+  phase: string;
+  interval_before: number;
+  interval_after: number;
+  ease_after: number;
+  reviewed_at: string;
 };
 
 export type GeneratedWord = {
@@ -80,6 +104,16 @@ export type GeneratedWord = {
   meaning: string;
   example: string;
   example_translation: string;
+};
+
+// メモ帳（あとで ChatGPT に投げるための下書きなど、自由記述）
+export type Memo = {
+  id: string;
+  user_id: string;
+  title: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
 };
 
 // 保存された実践文（履歴に表示・再閲覧用）

@@ -36,11 +36,19 @@ const folderIcon = (
   </svg>
 );
 
+const memoIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M4 4h16v12H8l-4 4z" />
+    <path d="M8 9h8M8 12h5" />
+  </svg>
+);
+
 const items = [
   { href: "/", label: "ホーム", icon: homeIcon },
   { href: "/words", label: "一覧", icon: listIcon },
   { href: "/add", label: "追加", icon: addIcon },
   { href: "/folders", label: "フォルダ", icon: folderIcon },
+  { href: "/memo", label: "メモ", icon: memoIcon },
   { href: "/review", label: "復習", icon: reviewIcon },
 ];
 
@@ -63,7 +71,7 @@ export default function NavBar() {
               className="flex flex-1 flex-col items-center gap-1 py-1"
             >
               <span
-                className={`flex h-9 w-14 items-center justify-center rounded-xl transition-all duration-200 ${
+                className={`flex h-9 w-12 items-center justify-center rounded-xl transition-all duration-200 ${
                   active
                     ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/30"
                     : "text-gray-400"

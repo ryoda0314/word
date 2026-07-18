@@ -3,10 +3,14 @@
 import { useMemo } from "react";
 
 type Props = {
-  // last_reviewed のタイムスタンプ（直近8日ぶん）
+  // 復習イベントのタイムスタンプ（直近8日ぶん。review_logs 由来、無ければ last_reviewed）
   isoDates: string[];
   // 今日まだ残っている復習枚数
   dueCount: number;
+  // 今後7日以内に期日が来る単語の srs_due（今日超過ぶんは含まない）
+  upcomingDue: string[];
+  // 直近7日間の定着率（again 以外の割合、%）。ログが無ければ null
+  retention: number | null;
 };
 
 function dayKey(d: Date) {
@@ -18,9 +22,14 @@ function dayKey(d: Date) {
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
-export default function StudyIndicator({ isoDates, dueCount }: Props) {
+export default function StudyIndicator({
+  isoDates,
+  dueCount,
+  upcomingDue,
+  retention,
+}: Props) {
   // タイムゾーンはユーザーのローカル基準。クライアント側で日付バケットを作る
-  const { todayCount, days } = useMemo(() => {
+  const { todayCount, days, forecast } = useMemo(() => {
     const counts = new Map<string, number>();
     isoDates.forEach((s) => {
       const k = dayKey(new Date(s));
@@ -47,8 +56,33 @@ export default function StudyIndicator({ isoDates, dueCount }: Props) {
         today: i === 0,
       });
     }
-    return { todayCount, days };
-  }, [isoDates]);
+
+    // 今後7日の復習予定。今日は「残り枚数」、明日以降は期日ベース
+    const dueBuckets = new Map<string, number>();
+    upcomingDue.forEach((s) => {
+      const k = dayKey(new Date(s));
+      dueBuckets.set(k, (dueBuckets.get(k) ?? 0) + 1);
+    });
+    const forecast: {
+      key: string;
+      label: string;
+      count: number;
+      today: boolean;
+    }[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      const k = dayKey(d);
+      forecast.push({
+        key: k,
+        label: i === 0 ? "今日" : WEEK[d.getDay()],
+        count: i === 0 ? dueCount : (dueBuckets.get(k) ?? 0),
+        today: i === 0,
+      });
+    }
+
+    return { todayCount, days, forecast };
+  }, [isoDates, upcomingDue, dueCount]);
 
   const status =
     dueCount === 0 && todayCount > 0
@@ -71,7 +105,14 @@ export default function StudyIndicator({ isoDates, dueCount }: Props) {
             <span className="pb-0.5 text-xs text-gray-500">回復習</span>
           </p>
         </div>
-        <span className="text-[11px] text-gray-400">{status}</span>
+        <div className="text-right">
+          <span className="block text-[11px] text-gray-400">{status}</span>
+          {retention !== null && (
+            <span className="mt-0.5 block text-[11px] font-semibold text-emerald-600">
+              7日間の定着率 {retention}%
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 flex justify-between gap-1.5">
@@ -108,6 +149,39 @@ export default function StudyIndicator({ isoDates, dueCount }: Props) {
             </div>
           );
         })}
+      </div>
+
+      {/* 忘却曲線が生む「これから来る復習」の見通し */}
+      <div className="mt-4 border-t border-gray-100 pt-3">
+        <p className="text-xs text-gray-400">今後7日の復習予定</p>
+        <div className="mt-2 flex justify-between gap-1.5">
+          {forecast.map((f) => (
+            <div
+              key={f.key}
+              className="flex flex-1 flex-col items-center gap-1"
+            >
+              <div
+                className={`flex h-7 w-full items-center justify-center rounded-lg text-xs font-semibold tabular-nums ${
+                  f.count === 0
+                    ? "bg-gray-50 text-gray-300"
+                    : f.today
+                      ? "bg-indigo-600 text-white"
+                      : "bg-indigo-50 text-indigo-700"
+                }`}
+                title={`${f.key}: ${f.count} 枚`}
+              >
+                {f.count}
+              </div>
+              <span
+                className={`text-[10px] ${
+                  f.today ? "font-bold text-indigo-600" : "text-gray-400"
+                }`}
+              >
+                {f.label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

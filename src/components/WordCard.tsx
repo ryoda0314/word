@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { phaseOf } from "@/lib/srs";
 import {
   KIND_META,
   LANGUAGE_META,
+  SRS_PHASE_META,
   type Folder,
   type Kind,
   type Language,
@@ -23,9 +25,20 @@ const FIELD =
   "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
 
 function dueInfo(srsDue: string) {
-  const diff = new Date(srsDue).getTime() - Date.now();
-  if (diff <= 0) return { label: "今日が復習日です", due: true };
-  const days = Math.ceil(diff / 86400000);
+  const due = new Date(srsDue);
+  const now = new Date();
+  if (due.getTime() <= now.getTime())
+    return { label: "今日が復習日です", due: true };
+  // 期日はローカル0時に揃っているので、日付単位の差で表示する
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfDue = new Date(due);
+  startOfDue.setHours(0, 0, 0, 0);
+  const days = Math.round(
+    (startOfDue.getTime() - startOfToday.getTime()) / 86400000,
+  );
+  if (days <= 0) return { label: "今日が復習日です", due: true };
+  if (days === 1) return { label: "次の復習は明日", due: false };
   return { label: `次の復習まで約 ${days} 日`, due: false };
 }
 
@@ -71,6 +84,10 @@ export default function WordCard({
   const correctReviews = word.correct_reviews ?? 0;
   const accuracy =
     totalReviews > 0 ? Math.round((correctReviews / totalReviews) * 100) : null;
+  const phaseMeta =
+    totalReviews === 0
+      ? { label: "新規", badgeClass: "bg-blue-100 text-blue-700" }
+      : SRS_PHASE_META[phaseOf(word)];
 
   async function handleSave() {
     if (!form.term.trim() || !form.meaning.trim()) {
@@ -293,6 +310,11 @@ export default function WordCard({
                   {word.part_of_speech}
                 </span>
               )}
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${phaseMeta.badgeClass}`}
+              >
+                {phaseMeta.label}
+              </span>
               {due.due && (
                 <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
                   復習日
@@ -346,7 +368,7 @@ export default function WordCard({
             </p>
           )}
           {/* 学習データ */}
-          <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-center">
+          <div className="grid grid-cols-4 gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-center">
             <div>
               <p className="text-[10px] font-medium text-gray-400">復習回数</p>
               <p className="text-base font-bold tabular-nums">
@@ -357,6 +379,12 @@ export default function WordCard({
               <p className="text-[10px] font-medium text-gray-400">正答率</p>
               <p className="text-base font-bold tabular-nums">
                 {accuracy === null ? "—" : `${accuracy}%`}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-gray-400">間隔</p>
+              <p className="text-base font-bold tabular-nums">
+                {word.srs_interval >= 1 ? `${word.srs_interval}日` : "—"}
               </p>
             </div>
             <div>

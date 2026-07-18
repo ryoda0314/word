@@ -24,13 +24,18 @@ export default async function HomePage() {
   let due = 0;
   let totalReviews = 0;
   let recentDates: string[] = [];
+  let upcomingDue: string[] = [];
+  let retention: number | null = null;
   try {
     const nowIso = new Date().toISOString();
-    // インジケータ用に直近8日間の last_reviewed を取得（日跨ぎ余白で 8 日）
+    // インジケータ用に直近8日間の復習ログを取得（日跨ぎ余白で 8 日）
     const eightDaysAgoIso = new Date(
       Date.now() - 8 * 86400000,
     ).toISOString();
-    const [t, w, i, d, r, recent] = await Promise.all([
+    const sevenDaysAheadIso = new Date(
+      Date.now() + 7 * 86400000,
+    ).toISOString();
+    const [t, w, i, d, r, logs, fallback, upcoming] = await Promise.all([
       supabase.from("words").select("*", { count: "exact", head: true }),
       supabase
         .from("words")
@@ -45,10 +50,22 @@ export default async function HomePage() {
         .select("*", { count: "exact", head: true })
         .lte("srs_due", nowIso),
       supabase.from("words").select("total_reviews"),
+      // 1 採点 = 1 行の正確な履歴（ヒートマップ・定着率用）
+      supabase
+        .from("review_logs")
+        .select("reviewed_at, grade")
+        .gte("reviewed_at", eightDaysAgoIso),
+      // review_logs 導入前のデータ用フォールバック（単語ごとの最終復習日）
       supabase
         .from("words")
         .select("last_reviewed")
         .gte("last_reviewed", eightDaysAgoIso),
+      // 忘却曲線スケジュールの見通し（今後7日に期日が来る単語）
+      supabase
+        .from("words")
+        .select("srs_due")
+        .gt("srs_due", nowIso)
+        .lte("srs_due", sevenDaysAheadIso),
     ]);
     total = t.count ?? 0;
     wordCount = w.count ?? 0;
@@ -58,11 +75,23 @@ export default async function HomePage() {
       (sum, row) => sum + (row.total_reviews ?? 0),
       0,
     );
-    recentDates = (
-      (recent.data as { last_reviewed: string | null }[]) ?? []
-    )
-      .map((row) => row.last_reviewed)
-      .filter((s): s is string => !!s);
+    const logRows = logs.error
+      ? []
+      : ((logs.data as { reviewed_at: string; grade: string }[]) ?? []);
+    if (logRows.length > 0) {
+      recentDates = logRows.map((row) => row.reviewed_at);
+      const correct = logRows.filter((row) => row.grade !== "again").length;
+      retention = Math.round((correct / logRows.length) * 100);
+    } else {
+      recentDates = (
+        (fallback.data as { last_reviewed: string | null }[]) ?? []
+      )
+        .map((row) => row.last_reviewed)
+        .filter((s): s is string => !!s);
+    }
+    upcomingDue = ((upcoming.data as { srs_due: string }[]) ?? []).map(
+      (row) => row.srs_due,
+    );
   } catch {
     // Supabase 未設定時はカウント 0 のまま表示する
   }
@@ -104,7 +133,12 @@ export default async function HomePage() {
         </div>
       </Link>
 
-      <StudyIndicator isoDates={recentDates} dueCount={due} />
+      <StudyIndicator
+        isoDates={recentDates}
+        dueCount={due}
+        upcomingDue={upcomingDue}
+        retention={retention}
+      />
 
       <div className="grid grid-cols-3 gap-2.5">
         <div className="rounded-2xl border border-black/5 bg-white p-3.5 shadow-sm">

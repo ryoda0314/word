@@ -4,10 +4,11 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { applyGrade, nextIntervalLabel, type Grade } from "@/lib/srs";
+import { applyGrade, nextIntervalLabel, phaseOf, type Grade } from "@/lib/srs";
 import {
   KIND_META,
   LANGUAGE_META,
+  SRS_PHASE_META,
   type Folder,
   type Kind,
   type Language,
@@ -116,6 +117,19 @@ function ReviewPageInner() {
     });
   }, [allWords, folderFilter, langFilter, kindFilter, scope]);
 
+  // 対象の内訳（新規 / 学習ステップ中 / 復習）
+  const breakdown = useMemo(() => {
+    let fresh = 0;
+    let learning = 0;
+    let review = 0;
+    for (const w of eligible) {
+      if ((w.total_reviews ?? 0) === 0) fresh += 1;
+      else if (phaseOf(w) === "review") review += 1;
+      else learning += 1;
+    }
+    return { fresh, learning, review };
+  }, [eligible]);
+
   // 開始ボタン押下時に最終的に並べるキュー
   function buildQueue(): Word[] {
     let arr = eligible.slice();
@@ -165,7 +179,7 @@ function ReviewPageInner() {
     const supabase = createClient();
     const baseTotal = current.total_reviews ?? 0;
     const baseCorrect = current.correct_reviews ?? 0;
-    await supabase
+    const { error: updateError } = await supabase
       .from("words")
       .update({
         ...update,
@@ -173,35 +187,48 @@ function ReviewPageInner() {
         correct_reviews: baseCorrect + (isCorrect ? 1 : 0),
       })
       .eq("id", current.id);
+    if (updateError) {
+      // srs_phase 未追加など、スキーマ移行前の環境で気づけるようにする
+      alert(
+        `保存に失敗しました。supabase/schema.sql を SQL Editor で実行してから再度お試しください。\n\n${updateError.message}`,
+      );
+      return;
+    }
+
+    // 復習ログ（ヒートマップ・定着率用）。失敗してもセッションは止めない
+    void supabase
+      .from("review_logs")
+      .insert({
+        word_id: current.id,
+        grade,
+        phase: phaseOf(current),
+        interval_before: current.srs_interval,
+        interval_after: update.srs_interval,
+        ease_after: update.srs_ease,
+      })
+      .then(() => {});
 
     setReviewedCount((c) => c + 1);
     if (isCorrect) setCorrectCount((c) => c + 1);
     setRevealed(false);
+    const updatedWord: Word = {
+      ...current,
+      ...update,
+      total_reviews: baseTotal + 1,
+      correct_reviews: baseCorrect + (isCorrect ? 1 : 0),
+    };
     // also reflect new srs_due/total_reviews in allWords so eligible のカウントも整合
-    setAllWords((ws) =>
-      ws.map((w) =>
-        w.id === current.id
-          ? {
-              ...w,
-              ...update,
-              total_reviews: baseTotal + 1,
-              correct_reviews: baseCorrect + (isCorrect ? 1 : 0),
-            }
-          : w,
-      ),
-    );
+    setAllWords((ws) => ws.map((w) => (w.id === current.id ? updatedWord : w)));
     setQueue((q) => {
       const rest = q.slice(1);
-      if (grade === "again") {
-        return [
-          ...rest,
-          {
-            ...current,
-            ...update,
-            total_reviews: baseTotal + 1,
-            correct_reviews: baseCorrect,
-          },
-        ];
+      // 学習ステップ（分単位の期日）はセッション内で再出題する。
+      // review フェーズ（日単位）は深夜0時前でも再出題しない
+      const minutesUntilDue =
+        (new Date(update.srs_due).getTime() - Date.now()) / 60000;
+      if (update.srs_phase !== "review" && minutesUntilDue <= 30) {
+        // 1分ステップは数枚後、10分ステップは少し後ろに差し込む
+        const pos = Math.min(minutesUntilDue <= 2 ? 3 : 9, rest.length);
+        return [...rest.slice(0, pos), updatedWord, ...rest.slice(pos)];
       }
       return rest;
     });
@@ -276,7 +303,12 @@ function ReviewPageInner() {
     const kindMeta = KIND_META[current.kind ?? "word"];
     const totalReviews = current.total_reviews ?? 0;
     const correctReviews = current.correct_reviews ?? 0;
-    const done = reviewedCount;
+    const isNew = totalReviews === 0;
+    const phaseMeta = isNew
+      ? { label: "新規", badgeClass: "bg-blue-100 text-blue-700" }
+      : SRS_PHASE_META[phaseOf(current)];
+    // 学習ステップの再出題があるため「キューから抜けた枚数」を進捗にする
+    const done = Math.max(0, sessionSize - queue.length);
     const pct =
       sessionSize > 0 ? Math.min(100, Math.round((done / sessionSize) * 100)) : 0;
 
@@ -292,7 +324,7 @@ function ReviewPageInner() {
               ← 中断
             </button>
             <span>
-              {done} / {sessionSize} ・ 残り {queue.length}
+              {done} / {sessionSize} 枚 ・ 採点 {reviewedCount} 回
             </span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
@@ -317,6 +349,11 @@ function ReviewPageInner() {
               className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${kindMeta.badgeClass}`}
             >
               {kindMeta.label}
+            </span>
+            <span
+              className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${phaseMeta.badgeClass}`}
+            >
+              {phaseMeta.label}
             </span>
           </div>
           <p className="text-3xl font-bold break-words">{current.term}</p>
@@ -585,6 +622,19 @@ function ReviewPageInner() {
           対象 <span className="font-semibold text-gray-700">{eligible.length}</span> 枚 → このセットは{" "}
           <span className="font-semibold text-indigo-600">{previewCount}</span> 枚出題
         </p>
+        {eligible.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
+            <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-700">
+              新規 {breakdown.fresh}
+            </span>
+            <span className="rounded-md bg-amber-50 px-2 py-1 text-amber-700">
+              学習中 {breakdown.learning}
+            </span>
+            <span className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700">
+              復習 {breakdown.review}
+            </span>
+          </div>
+        )}
       </section>
 
       {allWords.length === 0 ? (
