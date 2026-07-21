@@ -7,6 +7,13 @@ export const metadata: Metadata = {
   title: "Wordtock ─ 単語ストック",
   description: "知らない英語・韓国語の単語をためて、間隔反復で復習する単語帳アプリ",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     // viewport-fit:cover と合わせ、ステータスバー下までコンテンツを広げる

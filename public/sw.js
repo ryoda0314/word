@@ -1,7 +1,7 @@
 // Wordtock ─ シンプルな Service Worker（PWA インストール + 軽量オフライン対応）
 // CACHE の値を変えると SW が更新され、古いキャッシュは activate で削除される
-const CACHE = "wordtock-v2";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "wordtock-v3";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/icon-192.png"];
 
 // オフライン時に「キャッシュにも無い」リクエストへ返す最後のフォールバック
 // （undefined を返すと "Failed to convert value to 'Response'" エラーになる）
